@@ -209,8 +209,8 @@ ros-$ROS_DISTRO-backward-ros libdw-dev
 安装 udev 规则
 
 ```bash
-cd  ~/ros2_ws/src/OrbbecSDK_ROS2/orbbec_camera/scripts
-sudo bash install_udev_rules.sh
+cd  ~/ros2_ws/src/OrbbecSDK_ROS2
+sudo bash scripts/download_resources.sh
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
