@@ -1,3 +1,4 @@
+services:
   orbbecsdk_ros2_jazzy:
     build:
       context: ..
@@ -9,6 +10,8 @@
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
       - /dev:/dev:rw
+      - /etc/udev/rules.d:/etc/udev/rules.d
+      - /run/udev:/run/udev
     network_mode: "host"
     privileged: true
     stdin_open: true

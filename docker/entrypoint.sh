@@ -12,4 +12,11 @@ if [ -f "${HOME}/orbbec_ws/install/setup.bash" ]; then
   source "${HOME}/orbbec_ws/install/setup.bash"
 fi
 
+if [ -S /run/udev/control ]; then
+  echo "[entrypoint] Reloading udev rules"
+  sudo udevadm control --reload-rules && sudo udevadm trigger || echo "[entrypoint] udev reload failed"
+else
+  echo "[entrypoint] Skipping udev reload (udev control socket not available)"
+fi
+
 exec "$@"

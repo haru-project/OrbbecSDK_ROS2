@@ -11,6 +11,8 @@ requirements. Below is a quick summary of the main differences from upstream
   and `nlohmann-json`, and reloads udev rules after package installation.
 - `docker/entrypoint.sh` now sources `/opt/ros/${ROS_DISTRO}` and an optional
   `${HOME}/orbbec_ws` overlay before executing the container command.
+- When the container starts, the entrypoint reloads udev rules if `/run/udev`
+  is available, so host-mounted rules take effect.
 - `docker/docker-compose.yaml` defines the `orbbecsdk_ros2_jazzy` service that
   builds from the new Dockerfile and launches `orbbec_camera femto_bolt.launch.py`.
 - A blank `docker/.env` file is provided for local overrides; both it and

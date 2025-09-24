@@ -33,8 +33,5 @@ RUN sudo apt-get update && sudo apt-get install -y \
     sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
 
-# Ensure the updated udev rules are applied
-RUN sudo udevadm control --reload-rules && sudo udevadm trigger
-
 COPY --chown=${HARU_USER}:${HARU_GROUP} docker/entrypoint.sh ${HOME}/entrypoint.sh
 RUN sudo chmod +x ${HOME}/entrypoint.sh
