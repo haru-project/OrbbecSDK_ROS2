@@ -1,0 +1,202 @@
+name: Build and Release ROS2 Jazzy Package
+on:
+  push:
+    branches: [ ros2 ]
+
+jobs:
+  bump-version:
+    runs-on: self-hosted
+    outputs:
+      versions: ${{ steps.bump.outputs.versions }}
+      primary_version: ${{ steps.bump.outputs.primary_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump package versions
+        id: bump
+        run: |
+          set -euo pipefail
+
+          packages=(orbbec_camera_msgs orbbec_camera orbbec_description)
+          sep=""
+          versions_json=""
+          primary_version=""
+
+          for pkg in "${packages[@]}"; do
+            package_xml="${pkg}/package.xml"
+            if [ ! -f "$package_xml" ]; then
+              echo "❌ Could not find $package_xml" >&2
+              exit 1
+            fi
+
+            current=$(grep -m1 "<version>" "$package_xml" | sed -E 's/.*<version>(.*)<\/version>.*/\1/')
+            IFS='.' read -r major minor patch <<< "$current"
+            new_version="$major.$minor.$((patch+1))"
+
+            echo "🔄 Bumping ${pkg}: $current -> $new_version"
+            sed -i "0,/<version>.*<\/version>/s|<version>.*</version>|<version>$new_version</version>|" "$package_xml"
+
+            final_version="${new_version}-noble"
+            versions_json+="${sep}\"$pkg\":\"$final_version\""
+            sep="," 
+
+            if [ "$pkg" = "orbbec_camera" ]; then
+              primary_version="$final_version"
+            fi
+          done
+
+          versions_json="{${versions_json}}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add orbbec_camera_msgs/package.xml orbbec_camera/package.xml orbbec_description/package.xml
+          git commit -m "chore: bump package versions [skip ci]" || echo "No changes"
+          git push || echo "Skip push"
+
+          echo "versions=$versions_json" >> "$GITHUB_OUTPUT"
+          echo "primary_version=$primary_version" >> "$GITHUB_OUTPUT"
+
+  build_msgs:
+    needs: bump-version
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/haru-project/haru-generic-jazzy:latest
+      credentials:
+        username: ${{ secrets.CI_USER }}
+        password: ${{ secrets.CI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Prepare workspace
+        run: |
+          set -euo pipefail
+          tmp_dir=$(mktemp -d)
+          cp -a orbbec_camera_msgs/. "$tmp_dir"/
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -a "$tmp_dir"/. .
+          echo "FLAVOR_SUFFIX=orbbec_camera_msgs" >> "$GITHUB_ENV"
+
+      - name: Build and publish orbbec_camera_msgs
+        uses: haru-project/action-build-ros2-package@master
+        with:
+          UPO_SERVER: ${{ secrets.UPO_SERVER }}
+          UPO_USER: ${{ secrets.UPO_USER }}
+          UPO_PASSWORD: ${{ secrets.ROBOTICS_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TOKEN }}
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-orbbec_camera_msgs
+          path: /colcon_ws/debians/*.deb
+
+  build_description:
+    needs: bump-version
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/haru-project/haru-generic-jazzy:latest
+      credentials:
+        username: ${{ secrets.CI_USER }}
+        password: ${{ secrets.CI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Prepare workspace
+        run: |
+          set -euo pipefail
+          tmp_dir=$(mktemp -d)
+          cp -a orbbec_description/. "$tmp_dir"/
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -a "$tmp_dir"/. .
+          echo "FLAVOR_SUFFIX=orbbec_description" >> "$GITHUB_ENV"
+
+      - name: Build and publish orbbec_description
+        uses: haru-project/action-build-ros2-package@master
+        with:
+          UPO_SERVER: ${{ secrets.UPO_SERVER }}
+          UPO_USER: ${{ secrets.UPO_USER }}
+          UPO_PASSWORD: ${{ secrets.ROBOTICS_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TOKEN }}
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-orbbec_description
+          path: /colcon_ws/debians/*.deb
+
+  build_camera:
+    needs: [bump-version, build_msgs]
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/haru-project/haru-generic-jazzy:latest
+      credentials:
+        username: ${{ secrets.CI_USER }}
+        password: ${{ secrets.CI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Prepare workspace
+        run: |
+          set -euo pipefail
+          tmp_dir=$(mktemp -d)
+          cp -a orbbec_camera/. "$tmp_dir"/
+          mkdir -p "$tmp_dir/orbbec_camera_msgs"
+          cp -a orbbec_camera_msgs/. "$tmp_dir/orbbec_camera_msgs"/
+          if [ -d scripts ]; then
+            cp -a scripts "$tmp_dir"/
+          fi
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -a "$tmp_dir"/. .
+          echo "FLAVOR_SUFFIX=orbbec_camera" >> "$GITHUB_ENV"
+
+      - name: Build and publish orbbec_camera
+        uses: haru-project/action-build-ros2-package@master
+        with:
+          UPO_SERVER: ${{ secrets.UPO_SERVER }}
+          UPO_USER: ${{ secrets.UPO_USER }}
+          UPO_PASSWORD: ${{ secrets.ROBOTICS_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TOKEN }}
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-orbbec_camera
+          path: /colcon_ws/debians/*.deb
+
+  release:
+    needs: [build_camera, build_description, build_msgs, bump-version]
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/haru-project/haru-generic-jazzy:latest
+      credentials:
+        username: ${{ secrets.CI_USER }}
+        password: ${{ secrets.CI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Download deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: debians
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.bump-version.outputs.primary_version }}
+          name: Release v${{ needs.bump-version.outputs.primary_version }}
+          generate_release_notes: true
+          files: debians/**/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}

@@ -5,7 +5,6 @@ services:
       dockerfile: docker/orbbecsdk_ros2.Dockerfile
     image: orbbecsdk_ros2_jazzy
     container_name: orbbecsdk_ros2_jazzy_container
-    user: "${UID:-1000}:${GID:-1000}"  # Uses environment variables or defaults to 1000:1000
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
@@ -17,12 +16,5 @@ services:
     stdin_open: true
     tty: true
     env_file: .env
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu] 
-    command: ["ros2", "launch", "orbbec_camera", "femto_bolt.launch.py"]
-    entrypoint: ["bash", "/home/haru/entrypoint.sh"]
+    command: ["ros2", "launch", "orbbec_camera", "femto_bolt.launch.py", "diagnostic_period:=0.0"]
+    entrypoint: ["/home/haru/entrypoint.sh"]
