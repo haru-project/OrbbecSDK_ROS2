@@ -1701,6 +1701,8 @@ void OBCameraNode::setupDefaultImageFormat() {
 void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(camera_name_, "camera_name", "camera");
   camera_link_frame_id_ = camera_name_ + "_link";
+  setAndGetNodeParameter<std::string>(camera_link_frame_id_, "camera_link_frame_id",
+                                      camera_link_frame_id_);
   for (auto stream_index : IMAGE_STREAMS) {
     std::string param_name = stream_name_[stream_index] + "_width";
     setAndGetNodeParameter(width_[stream_index], param_name, 0);
@@ -1742,6 +1744,8 @@ void OBCameraNode::getParameters() {
   }
 
   accel_gyro_frame_id_ = camera_name_ + "_accel_gyro_optical_frame";
+  setAndGetNodeParameter<std::string>(accel_gyro_frame_id_, "accel_gyro_optical_frame_id",
+                                      accel_gyro_frame_id_);
 
   setAndGetNodeParameter<bool>(enable_sync_output_accel_gyro_, "enable_sync_output_accel_gyro",
                                false);
