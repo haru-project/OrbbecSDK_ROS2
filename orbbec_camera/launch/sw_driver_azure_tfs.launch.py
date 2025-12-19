@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import PushRosNamespace
 from launch.actions import GroupAction
@@ -25,7 +26,7 @@ def generate_launch_description():
     # Camera configuration parameters
     camera_args = [
         DeclareLaunchArgument("camera_name", default_value="camera"),
-        DeclareLaunchArgument("depth_registration", default_value="false"),
+        DeclareLaunchArgument("depth_registration", default_value="true"),
         DeclareLaunchArgument("serial_number", default_value=""),
         DeclareLaunchArgument("usb_port", default_value=""),
         DeclareLaunchArgument("device_num", default_value="1"),
@@ -81,7 +82,7 @@ def generate_launch_description():
         DeclareLaunchArgument("gyro_range", default_value="1000dps"),
         DeclareLaunchArgument("linear_accel_cov", default_value="0.01"),
         DeclareLaunchArgument("angular_vel_cov", default_value="0.01"),
-        DeclareLaunchArgument("publish_tf", default_value="true"),
+        DeclareLaunchArgument("publish_tf", default_value="false"),
         DeclareLaunchArgument("tf_publish_rate", default_value="0.0"),
         DeclareLaunchArgument("ir_info_url", default_value=""),
         DeclareLaunchArgument("color_info_url", default_value=""),
@@ -138,6 +139,7 @@ def generate_launch_description():
                 ]
             ),
         ),
+        DeclareLaunchArgument("custom_tfs", default_value="true"),
         DeclareLaunchArgument("world_frame", default_value="world"),
         DeclareLaunchArgument("azure_frame", default_value="strawberry/azure"),
         # World to Azure transform parameters
@@ -194,9 +196,46 @@ def generate_launch_description():
         ("gyro_optical_frame_id", "_gyro_optical_frame"),
     ]
     for arg_name, suffix in camera_frame_suffixes + optical_frame_suffixes:
-        frame_args.append(
-            DeclareLaunchArgument(arg_name, default_value=prefixed_frame_expr(suffix))
-        )
+        if arg_name == "camera_color_frame_id":
+            frame_args.append(
+                DeclareLaunchArgument(
+                    arg_name,
+                    default_value=PythonExpression(
+                        [
+                            "'strawberry/azure/rgb_camera_link' if '",
+                            LaunchConfiguration("custom_tfs"),
+                            "' == 'true' else '",
+                            LaunchConfiguration("tf_prefix"),
+                            "/",
+                            LaunchConfiguration("camera_name"),
+                            suffix,
+                            "'",
+                        ]
+                    ),
+                )
+            )
+        elif arg_name == "color_optical_frame_id":
+            frame_args.append(
+                DeclareLaunchArgument(
+                    arg_name,
+                    default_value=PythonExpression(
+                        [
+                            "'strawberry/azure/rgb_camera_link' if '",
+                            LaunchConfiguration("custom_tfs"),
+                            "' == 'true' else '",
+                            LaunchConfiguration("tf_prefix"),
+                            "/",
+                            LaunchConfiguration("camera_name"),
+                            suffix,
+                            "'",
+                        ]
+                    ),
+                )
+            )
+        else:
+            frame_args.append(
+                DeclareLaunchArgument(arg_name, default_value=prefixed_frame_expr(suffix))
+            )
 
     args = camera_args + tf_args + frame_args
 
@@ -209,6 +248,7 @@ def generate_launch_description():
             package="tf2_ros",
             executable="static_transform_publisher",
             name="tf_world_to_azure",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
             arguments=[
                 LaunchConfiguration("azure_pos_x"),
                 LaunchConfiguration("azure_pos_y"),
@@ -223,7 +263,8 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="tf_azure_to_strawberry_camera",
+            name="tf_azure_to_camera_base",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
             arguments=[
                 LaunchConfiguration("pos_x"),
                 LaunchConfiguration("pos_y"),
@@ -232,22 +273,89 @@ def generate_launch_description():
                 LaunchConfiguration("att_pitch"),
                 LaunchConfiguration("att_yaw"),
                 LaunchConfiguration("azure_frame"),
-                LaunchConfiguration("tf_prefix"),
+                "strawberry/azure/camera_base",
             ],
         ),
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="tf_strawberry_camera_to_camera_link",
+            name="tf_camera_base_to_depth_link",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
             arguments=[
-                LaunchConfiguration("camera_offset_x"),
-                LaunchConfiguration("camera_offset_y"),
-                LaunchConfiguration("camera_offset_z"),
-                LaunchConfiguration("camera_roll"),
-                LaunchConfiguration("camera_pitch"),
-                LaunchConfiguration("camera_yaw"),
-                LaunchConfiguration("tf_prefix"),
-                LaunchConfiguration("camera_link_frame_id"),
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "strawberry/azure/camera_base",
+                "strawberry/azure/depth_camera_link",
+            ],
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="tf_camera_base_to_body",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
+            arguments=[
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "strawberry/azure/camera_base",
+                "strawberry/azure/camera_body",
+            ],
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="tf_camera_base_to_visor",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
+            arguments=[
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.0",
+                "strawberry/azure/camera_base",
+                "strawberry/azure/camera_visor",
+            ],
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="tf_depth_link_to_rgb_link",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
+            arguments=[
+                "0.0",
+                "0.0",
+                "0.0",
+                "-0.00490777101367712",
+                "-0.053041599690914154",
+                "0.000442717457190156",
+                "0.9978846907615662",
+                "strawberry/azure/depth_camera_link",
+                "strawberry/azure/rgb_camera_link",
+            ],
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="tf_depth_link_to_imu_link",
+            condition=IfCondition(LaunchConfiguration("custom_tfs")),
+            arguments=[
+                "0.0",
+                "0.0",
+                "0.0",
+                "0.5254825949668884",
+                "0.4731469154357911",
+                "-0.4731469154357909",
+                "0.5254826545715332",
+                "strawberry/azure/depth_camera_link",
+                "strawberry/azure/imu_link",
             ],
         ),
     ]
