@@ -16,8 +16,9 @@ def generate_launch_description():
     # ============================================================================
     # These control which pieces are launched (enable/disable whole groups)
     control_args = [
-        DeclareLaunchArgument("launch_azure", default_value="true"),
-        DeclareLaunchArgument("launch_world_to_strawberry_tf", default_value="true"),
+        DeclareLaunchArgument("launch_world_to_strawberry_tf", default_value="false"),
+        DeclareLaunchArgument("namespace_prefix", default_value="strawberry"),
+        DeclareLaunchArgument("frame_prefix", default_value=LaunchConfiguration("namespace_prefix")),
     ]
 
     # ============================================================================
@@ -25,7 +26,7 @@ def generate_launch_description():
     # ============================================================================
     tf_args = [
         DeclareLaunchArgument("world_frame", default_value="world"),
-        DeclareLaunchArgument("strawberry_root", default_value="strawberry/orbbec_femto_bolt"),
+        DeclareLaunchArgument("strawberry_root", default_value="strawberry"),
         DeclareLaunchArgument("world_to_strawberry_x", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_y", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_z", default_value="1.0"),
@@ -167,13 +168,19 @@ def generate_launch_description():
         return LaunchDescription(
             args
             + [
-                Node(
-                    package="orbbec_camera",
-                    executable="orbbec_camera_node",
-                    name="ob_camera_node",
-                    namespace=LaunchConfiguration("camera_name"),
-                    parameters=parameters,
-                    output="screen",
+                GroupAction(
+                    [
+                        PushRosNamespace(LaunchConfiguration("namespace_prefix")),
+                        PushRosNamespace(LaunchConfiguration("camera_name")),
+                        Node(
+                            package="orbbec_camera",
+                            executable="orbbec_camera_node",
+                            name="ob_camera_node",
+                            namespace="",
+                            parameters=parameters,
+                            output="screen",
+                        ),
+                    ]
                 )
             ]
             + [tf_node]
@@ -184,7 +191,7 @@ def generate_launch_description():
         compose_node = ComposableNode(
             package="orbbec_camera",
             plugin="orbbec_camera::OBCameraNodeDriver",
-            name=LaunchConfiguration("camera_name"),
+            name="ob_camera_node",
             namespace="",
             parameters=parameters,
         )
@@ -222,7 +229,11 @@ def generate_launch_description():
             args
             + [
                 GroupAction(
-                    [PushRosNamespace(LaunchConfiguration("camera_name")), container]
+                    [
+                        PushRosNamespace(LaunchConfiguration("namespace_prefix")),
+                        PushRosNamespace(LaunchConfiguration("camera_name")),
+                        container,
+                    ]
                 )
             ]
             + [tf_node]

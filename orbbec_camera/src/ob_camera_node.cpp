@@ -1700,6 +1700,11 @@ void OBCameraNode::setupDefaultImageFormat() {
 
 void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(camera_name_, "camera_name", "camera");
+  setAndGetNodeParameter<std::string>(frame_prefix_, "frame_prefix", "");
+  std::string normalized_frame_prefix = frame_prefix_;
+  if (!normalized_frame_prefix.empty() && normalized_frame_prefix.back() != '/') {
+    normalized_frame_prefix.push_back('/');
+  }
   camera_link_frame_id_ = camera_name_ + "_link";
   setAndGetNodeParameter<std::string>(camera_link_frame_id_, "camera_link_frame_id",
                                       camera_link_frame_id_);
@@ -1771,6 +1776,26 @@ void OBCameraNode::getParameters() {
     depth_aligned_frame_id_[stream_index] =
         camera_name_ + "_" + stream_name_[COLOR] + "_optical_frame";
   }
+
+  // Apply the optional frame prefix to all frame_ids (after all frame ids are set)
+  if (!normalized_frame_prefix.empty()) {
+    auto apply_prefix = [&normalized_frame_prefix](std::string& frame_id) {
+      frame_id = normalized_frame_prefix + frame_id;
+    };
+
+    apply_prefix(camera_link_frame_id_);
+    apply_prefix(accel_gyro_frame_id_);
+    for (auto& kv : frame_id_) {
+      apply_prefix(kv.second);
+    }
+    for (auto& kv : optical_frame_id_) {
+      apply_prefix(kv.second);
+    }
+    for (auto& kv : depth_aligned_frame_id_) {
+      apply_prefix(kv.second);
+    }
+  }
+
   setAndGetNodeParameter<bool>(publish_tf_, "publish_tf", true);
   setAndGetNodeParameter<double>(tf_publish_rate_, "tf_publish_rate", 0.0);
   setAndGetNodeParameter<bool>(depth_registration_, "depth_registration", false);
