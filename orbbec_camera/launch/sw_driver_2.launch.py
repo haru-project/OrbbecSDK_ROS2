@@ -16,20 +16,35 @@ def generate_launch_description():
     # ============================================================================
     # These control which pieces are launched (enable/disable whole groups)
     control_args = [
-        DeclareLaunchArgument("launch_world_to_strawberry_tf", default_value="false"),
-        DeclareLaunchArgument("namespace_prefix", default_value="strawberry"),
-        DeclareLaunchArgument("frame_prefix", default_value=LaunchConfiguration("namespace_prefix")),
+        DeclareLaunchArgument("launch_world_to_strawberry_tf", default_value="true"),
+        DeclareLaunchArgument("frame_prefix", default_value="strawberry"),
+        DeclareLaunchArgument("launch_frame_prefix_to_camera", default_value="true"),
+        DeclareLaunchArgument("namespace_prefix", default_value=""),
     ]
 
     # ============================================================================
     # Static TF (world -> strawberry) parameters
     # ============================================================================
-    tf_args = [
+    tf_world_args = [
         DeclareLaunchArgument("world_frame", default_value="world"),
         DeclareLaunchArgument("strawberry_root", default_value="strawberry"),
         DeclareLaunchArgument("world_to_strawberry_x", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_y", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_z", default_value="1.0"),
+        DeclareLaunchArgument("world_to_strawberry_roll", default_value="0.0"),
+        DeclareLaunchArgument("world_to_strawberry_pitch", default_value="0.0"),
+        DeclareLaunchArgument("world_to_strawberry_yaw", default_value="0.0"),
+    ]
+
+    # ============================================================================
+    # Static TF (strawberry -> strawberry/orbbec_femto_bolt_link) parameters
+    # ============================================================================
+    tf_camera_args = [
+        DeclareLaunchArgument("namespace", default_value=LaunchConfiguration("frame_prefix")),
+        DeclareLaunchArgument("camera_initial_tf", default_value="strawberry/orbbec_femto_bolt_link"),
+        DeclareLaunchArgument("world_to_strawberry_x", default_value="0.0"),
+        DeclareLaunchArgument("world_to_strawberry_y", default_value="0.0"),
+        DeclareLaunchArgument("world_to_strawberry_z", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_roll", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_pitch", default_value="0.0"),
         DeclareLaunchArgument("world_to_strawberry_yaw", default_value="0.0"),
@@ -140,31 +155,50 @@ def generate_launch_description():
     ]
 
     # combine all declared args for the LaunchDescription
-    args = control_args + tf_args + args
+    args = control_args + tf_world_args + tf_camera_args + args
 
     # Node configuration
     parameters = [{arg.name: LaunchConfiguration(arg.name)} for arg in args]
     # get  ROS_DISTRO
     ros_distro = os.environ["ROS_DISTRO"]
-    if ros_distro == "foxy":
-        # static tf node (world -> strawberry)
-        tf_node = Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="tf_world_to_strawberry",
-            condition=IfCondition(LaunchConfiguration("launch_world_to_strawberry_tf")),
-            arguments=[
-                LaunchConfiguration("world_to_strawberry_x"),
-                LaunchConfiguration("world_to_strawberry_y"),
-                LaunchConfiguration("world_to_strawberry_z"),
-                LaunchConfiguration("world_to_strawberry_roll"),
-                LaunchConfiguration("world_to_strawberry_pitch"),
-                LaunchConfiguration("world_to_strawberry_yaw"),
-                LaunchConfiguration("world_frame"),
-                LaunchConfiguration("strawberry_root"),
-            ],
-        )
 
+    # static tf node (world -> strawberry)
+    tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="tf_world_to_strawberry",
+        condition=IfCondition(LaunchConfiguration("launch_world_to_strawberry_tf")),
+        arguments=[
+            LaunchConfiguration("world_to_strawberry_x"),
+            LaunchConfiguration("world_to_strawberry_y"),
+            LaunchConfiguration("world_to_strawberry_z"),
+            LaunchConfiguration("world_to_strawberry_roll"),
+            LaunchConfiguration("world_to_strawberry_pitch"),
+            LaunchConfiguration("world_to_strawberry_yaw"),
+            LaunchConfiguration("world_frame"),
+            LaunchConfiguration("strawberry_root"),
+        ],
+    )
+
+    # static tf node (strawberry -> strawberry/orbbec_femto_bolt_link)
+    tf_camera_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="tf_strawberry_to_camera",
+        condition=IfCondition(LaunchConfiguration("launch_frame_prefix_to_camera")),
+        arguments=[
+            LaunchConfiguration("world_to_strawberry_x"),
+            LaunchConfiguration("world_to_strawberry_y"),
+            LaunchConfiguration("world_to_strawberry_z"),
+            LaunchConfiguration("world_to_strawberry_roll"),
+            LaunchConfiguration("world_to_strawberry_pitch"),
+            LaunchConfiguration("world_to_strawberry_yaw"),
+            LaunchConfiguration("strawberry_root"),
+            LaunchConfiguration("camera_initial_tf"),
+        ],
+    )
+
+    if ros_distro == "foxy":
         return LaunchDescription(
             args
             + [
@@ -183,11 +217,9 @@ def generate_launch_description():
                     ]
                 )
             ]
-            + [tf_node]
+            + [tf_node, tf_camera_node]
         )
-    # Define the ComposableNode
     else:
-        # Define the ComposableNode
         compose_node = ComposableNode(
             package="orbbec_camera",
             plugin="orbbec_camera::OBCameraNodeDriver",
@@ -195,7 +227,6 @@ def generate_launch_description():
             namespace="",
             parameters=parameters,
         )
-        # Define the ComposableNodeContainer
         container = ComposableNodeContainer(
             name="camera_container",
             namespace="",
@@ -206,25 +237,6 @@ def generate_launch_description():
             ],
             output="screen",
         )
-        # static tf node (world -> strawberry)
-        tf_node = Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="tf_world_to_strawberry",
-            condition=IfCondition(LaunchConfiguration("launch_world_to_strawberry_tf")),
-            arguments=[
-                LaunchConfiguration("world_to_strawberry_x"),
-                LaunchConfiguration("world_to_strawberry_y"),
-                LaunchConfiguration("world_to_strawberry_z"),
-                LaunchConfiguration("world_to_strawberry_roll"),
-                LaunchConfiguration("world_to_strawberry_pitch"),
-                LaunchConfiguration("world_to_strawberry_yaw"),
-                LaunchConfiguration("world_frame"),
-                LaunchConfiguration("strawberry_root"),
-            ],
-        )
-
-        # Launch description
         ld = LaunchDescription(
             args
             + [
@@ -236,6 +248,6 @@ def generate_launch_description():
                     ]
                 )
             ]
-            + [tf_node]
+            + [tf_node, tf_camera_node]
         )
         return ld
