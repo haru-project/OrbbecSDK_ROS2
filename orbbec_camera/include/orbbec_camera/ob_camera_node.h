@@ -125,11 +125,12 @@ const stream_index_pair DEPTH{OB_STREAM_DEPTH, 0};
 const stream_index_pair INFRA0{OB_STREAM_IR, 0};
 const stream_index_pair INFRA1{OB_STREAM_IR_LEFT, 0};
 const stream_index_pair INFRA2{OB_STREAM_IR_RIGHT, 0};
+const stream_index_pair LIDAR{OB_STREAM_LIDAR, 0};
 
 const stream_index_pair GYRO{OB_STREAM_GYRO, 0};
 const stream_index_pair ACCEL{OB_STREAM_ACCEL, 0};
 
-const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR, DEPTH, INFRA0, INFRA1, INFRA2};
+const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR, DEPTH, INFRA0, INFRA1, INFRA2, LIDAR};
 
 const std::vector<stream_index_pair> HID_STREAMS = {GYRO, ACCEL};
 
@@ -350,7 +351,8 @@ class OBCameraNode {
   void setRotationCallback(const std::shared_ptr<SetInt32::Request>& request,
                            std::shared_ptr<SetInt32::Response>& response,
                            const stream_index_pair& stream_index);
-
+  void getLaserStatusCallback(const std::shared_ptr<GetBool::Request>& request,
+                              std::shared_ptr<GetBool::Response>& response);
   void getLdpStatusCallback(const std::shared_ptr<GetBool::Request>& request,
                             std::shared_ptr<GetBool::Response>& response);
   void getPtpConfigCallback(const std::shared_ptr<GetBool::Request>& request,
@@ -364,6 +366,10 @@ class OBCameraNode {
                                       std::shared_ptr<SetInt32 ::Response>& response);
   void setFilterCallback(const std::shared_ptr<SetFilter ::Request>& request,
                          std::shared_ptr<SetFilter ::Response>& response);
+  void setPointCloudDecimationCallback(const std::shared_ptr<SetInt32::Request>& request,
+                                       std::shared_ptr<SetInt32::Response>& response);
+  void getPointCloudDecimationCallback(const std::shared_ptr<GetInt32::Request>& request,
+                                       std::shared_ptr<GetInt32::Response>& response);
   void setSYNCHostimeCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
   void sendSoftwareTriggerCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
@@ -560,6 +566,7 @@ class OBCameraNode {
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_laser_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ldp_enable_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ldp_status_srv_;
+  rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_laser_status_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ptp_config_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ptp_config_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_floor_enable_srv_;
@@ -571,6 +578,8 @@ class OBCameraNode {
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_sync_host_time_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr send_software_trigger_srv_;
   rclcpp::Service<SetFilter>::SharedPtr set_filter_srv_;
+  rclcpp::Service<SetInt32>::SharedPtr set_point_cloud_decimation_srv_;
+  rclcpp::Service<GetInt32>::SharedPtr get_point_cloud_decimation_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_streams_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
@@ -586,6 +595,7 @@ class OBCameraNode {
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr depth_cloud_pub_;
   bool enable_point_cloud_ = true;
   bool enable_colored_point_cloud_ = false;
+  int point_cloud_decimation_filter_factor_ = 1;
   std::recursive_mutex point_cloud_mutex_;
 
   orbbec_camera_msgs::msg::DeviceInfo device_info_;
@@ -629,6 +639,7 @@ class OBCameraNode {
   int color_white_balance_ = -1;
   int color_ae_max_exposure_ = -1;
   int color_brightness_ = -1;
+  int color_roi_brightness_ = -1;
   int color_sharpness_ = -1;
   int color_gamma_ = -1;
   int color_saturation_ = -1;
@@ -660,6 +671,7 @@ class OBCameraNode {
   // Only for Gemini2 device
   std::string disparity_to_depth_mode_ = "HW";
   std::string depth_work_mode_;
+  std::string preset_resolution_config_;
   OBMultiDeviceSyncMode sync_mode_ = OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_FREE_RUN;
   std::string sync_mode_str_;
   int depth_delay_us_ = 0;
@@ -832,6 +844,6 @@ class OBCameraNode {
   std::unique_ptr<FpsDelayStatus> fps_delay_status_color_{nullptr};
   std::unique_ptr<FpsDelayStatus> fps_delay_status_depth_{nullptr};
 
-  std::string intra_camera_sync_reference_;
+  std::string intra_camera_sync_reference_ = "";
 };
 }  // namespace orbbec_camera
